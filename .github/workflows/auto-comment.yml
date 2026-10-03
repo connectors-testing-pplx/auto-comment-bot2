@@ -7,6 +7,11 @@ on:
 permissions:
   issues: write
 
+# Serialize runs per issue: creating a labeled issue fires both 'opened' and 'labeled'
+concurrency:
+  group: auto-comment-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
 jobs:
   thank-and-close:
     if: contains(github.event.issue.labels.*.name, 'feedback') || contains(github.event.issue.labels.*.name, 'suggestion')
