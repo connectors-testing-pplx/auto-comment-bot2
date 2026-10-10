@@ -1,0 +1,40 @@
+name: Auto-comment and close feedback/suggestion issues
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  issues: write
+
+jobs:
+  respond:
+    # Only run when the issue carries a "feedback" or "suggestion" label
+    if: contains(github.event.issue.labels.*.name, 'feedback') || contains(github.event.issue.labels.*.name, 'suggestion')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment and close
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.issue.number;
+
+            // Skip if already closed (e.g. "labeled" event fired after we closed it)
+            if (context.payload.issue.state === 'closed') {
+              core.info(`Issue #${issue_number} is already closed; skipping.`);
+              return;
+            }
+
+            // Avoid duplicate thank-you comments if the workflow fires twice
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const alreadyThanked = comments.some(c =>
+              c.user?.type === 'Bot' && c.body?.includes('Thank you for your contribution!'));
+
+            if (!alreadyThanked) {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body: 'Thank you for your contribution!' });
+              core.info(`Commented on issue #${issue_number}.`);
+            }
+
+            await github.rest.issues.update({ owner, repo, issue_number, state: 'closed', state_reason: 'completed' });
+            core.info(`Closed issue #${issue_number}.`);
