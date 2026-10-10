@@ -7,6 +7,12 @@ on:
 permissions:
   issues: write
 
+# Serialize runs per issue: creating an issue with a label fires "opened" and
+# "labeled" simultaneously, so without this two runs can race and double-comment.
+concurrency:
+  group: auto-comment-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
 jobs:
   respond:
     # Only run when the issue carries a "feedback" or "suggestion" label
@@ -20,8 +26,9 @@ jobs:
             const { owner, repo } = context.repo;
             const issue_number = context.payload.issue.number;
 
-            // Skip if already closed (e.g. "labeled" event fired after we closed it)
-            if (context.payload.issue.state === 'closed') {
+            // Re-fetch the issue: the event payload may be stale if another run already closed it
+            const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number });
+            if (issue.state === 'closed') {
               core.info(`Issue #${issue_number} is already closed; skipping.`);
               return;
             }
